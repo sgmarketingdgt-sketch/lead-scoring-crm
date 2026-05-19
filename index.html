@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lead Scoring | SG Marketing Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+tailwind.config = {
+  theme: { extend: { fontFamily: {
+    sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+    mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+  }}}
+};
+</script>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+html, body { background: #0A0E1A; color: #E2E8F0; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; margin: 0; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0A0E1A; }
+::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #334155; }
+.card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
+.score-bar { background: rgba(255,255,255,0.06); border-radius: 4px; height: 6px; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+.tab-btn { font-family: 'Plus Jakarta Sans', sans-serif; background: none; border-left: none; border-right: none; border-top: none; cursor: pointer; }
+.filter-btn { cursor: pointer; transition: all 0.15s; font-family: 'Plus Jakarta Sans', sans-serif; }
+.lead-row { transition: background 0.1s; }
+.lead-row:hover { background: rgba(255,255,255,0.03) !important; }
+.btn { font-family: 'Plus Jakarta Sans', sans-serif; cursor: pointer; transition: all 0.2s; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ============================================================ -->
+<!-- HEADER                                                        -->
+<!-- ============================================================ -->
+<header style="border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(10,14,26,0.97); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 50;" class="px-8 py-4">
+  <div class="flex items-center justify-between max-w-7xl mx-auto">
+    <div class="flex items-center gap-5">
+      <div>
+        <div style="font-size: 10px; color: #FF4D6D; letter-spacing: 0.14em; font-weight: 700; font-family: 'JetBrains Mono', monospace; margin-bottom: 2px;">SG MARKETING DIGITAL</div>
+        <div style="font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: #F8FAFC;">Lead Scoring Dashboard</div>
+      </div>
+      <a href="https://invictus-prospect-yonzza.vercel.app/" target="_blank"
+        style="font-size: 11px; padding: 6px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); color: #475569; border: 1px solid rgba(255,255,255,0.06); text-decoration: none; font-weight: 600;">
+        ← CRM
+      </a>
+    </div>
+    <div class="flex items-center gap-3">
+      <div id="last-sync" style="font-size: 11px; color: #334155; font-family: 'JetBrains Mono', monospace;"></div>
+      <button id="sync-btn" onclick="saveScores()" class="btn"
+        style="font-size: 11px; padding: 7px 14px; border-radius: 8px; background: rgba(59,130,246,0.12); color: #3B82F6; border: 1px solid rgba(59,130,246,0.25); font-weight: 700;">
+        ↑ Salvar Scores
+      </button>
+      <div id="load-status" style="font-size: 11px; color: #475569; font-family: 'JetBrains Mono', monospace; min-width: 100px;">carregando...</div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<!-- TAB NAV                                                       -->
+<!-- ============================================================ -->
+<nav style="border-bottom: 1px solid rgba(255,255,255,0.06);" class="px-8">
+  <div class="flex max-w-7xl mx-auto">
+    <button onclick="setTab('overview')"    data-tab="overview"    class="tab-btn px-5 py-3 text-sm" style="border-bottom: 2px solid transparent; color: #64748B;">Visão Geral</button>
+    <button onclick="setTab('nichos')"      data-tab="nichos"      class="tab-btn px-5 py-3 text-sm" style="border-bottom: 2px solid transparent; color: #64748B;">Por Nicho</button>
+    <button onclick="setTab('ranking')"     data-tab="ranking"     class="tab-btn px-5 py-3 text-sm" style="border-bottom: 2px solid transparent; color: #64748B;">Ranking</button>
+    <button onclick="setTab('abordagens')"  data-tab="abordagens"  class="tab-btn px-5 py-3 text-sm" style="border-bottom: 2px solid transparent; color: #64748B;">Abordagens por Nicho</button>
+  </div>
+</nav>
+
+<!-- ============================================================ -->
+<!-- MAIN                                                          -->
+<!-- ============================================================ -->
+<main class="px-8 py-7 max-w-7xl mx-auto">
+
+  <!-- TAB: VISÃO GERAL -->
+  <div id="tab-overview" class="tab-content">
+    <div class="grid grid-cols-4 gap-4 mb-6" id="kpi-cards"></div>
+    <div class="grid grid-cols-2 gap-5">
+      <div class="card p-5" id="cls-dist"></div>
+      <div class="card p-5" id="nicho-dist"></div>
+    </div>
+  </div>
+
+  <!-- TAB: POR NICHO -->
+  <div id="tab-nichos" class="tab-content hidden">
+    <div id="nichos-grid" class="grid grid-cols-2 gap-5"></div>
+  </div>
+
+  <!-- TAB: RANKING -->
+  <div id="tab-ranking" class="tab-content hidden">
+    <div class="flex items-center gap-2 mb-5 flex-wrap">
+      <div id="filter-btns" class="flex gap-2 flex-wrap"></div>
+      <div class="ml-auto" id="ranking-count" style="font-size: 11px; color: #475569; font-family: 'JetBrains Mono', monospace;"></div>
+    </div>
+    <div id="ranking-table"></div>
+  </div>
+
+  <!-- TAB: ABORDAGENS -->
+  <div id="tab-abordagens" class="tab-content hidden">
+    <p style="font-size: 13px; color: #64748B; margin-bottom: 20px;">
+      Abordagens e ganchos extraídos dos leads com maior score em cada categoria de nicho. Use como playbook para abordagem comercial.
+    </p>
+    <div id="abordagens-content"></div>
+  </div>
+
+</main>
+
+<!-- ============================================================ -->
+<!-- SCRIPTS                                                       -->
+<!-- ============================================================ -->
+<script>
+// ================================================================
+// CONFIG — duas conexões Supabase (CRM: read-only / Scoring: read-write)
+// ================================================================
+const CRM_URL   = 'https://blwkfqfcwlxnydliucrd.supabase.co';
+const CRM_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsd2tmcWZjd2x4bnlkbGl1Y3JkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMzA2NDIsImV4cCI6MjA5MjkwNjY0Mn0.o2uAXLljZXbrgjX8P0jVt-SB5xtfkrHZZy7xjyuBF-g';
+const CRM_AGENCIA = 'Yonzza Digital';
+
+const SCORE_URL = 'https://sqsupunqwmgmjdpvahta.supabase.co';
+const SCORE_KEY = 'sb_publishable_4yjCc8xrJCUME7cqWgpajw_HUGaCBTV';
+
+const crmDb   = supabase.createClient(CRM_URL,   CRM_KEY);
+const scoreDb = supabase.createClient(SCORE_URL, SCORE_KEY);
+
+// ================================================================
+// SCORING ALGORITHM
+// ================================================================
+const NICHO_GRUPOS = [
+  { pts: 20, label: 'Saúde & Estética',       color: '#FF4D6D', terms: ['clinica','estetica','estética','odontolog','dentis','saude','saúde','medic','psicolog','nutri','fisioter','dermatol','oftalm','veterinar','beleza','salao','salão','barbearia','barber','spa','pilates','yoga','academia','crossfit','personal','gym'] },
+  { pts: 15, label: 'Food & Beverage',         color: '#FFB800', terms: ['restaurante','hamburgueria','hamburguer','pizza','pizzaria','lanchonete','padaria','panificad','confeitari','doce','sobremesa','cafe','café','bar','boteco','sushi','churrascaria'] },
+  { pts: 15, label: 'Educação',                color: '#A78BFA', terms: ['escola','faculdade','universidade','curso','treinamento','idioma','ingles','inglês','espanhol','aviacao','aviação','pilot','instruto','educac','educaç'] },
+  { pts: 15, label: 'Imobiliária',             color: '#34D399', terms: ['imobiliar','corretor','imóvel','imovel','construtora','incorporadora','loteamento','condominio','condomínio'] },
+  { pts: 15, label: 'Serviços Profissionais',  color: '#00D4FF', terms: ['advocacia','advogado','contabilidade','contador','consultor','juridico','jurídico','financeiro','seguro'] },
+  { pts: 15, label: 'Automotivo',              color: '#F97316', terms: ['oficina','mecanic','autocentro','automovel','automóvel','carro','veículo','veiculo','funilaria','pneu','tapeçaria'] },
+  { pts: 10, label: 'Varejo & Moda',           color: '#EC4899', terms: ['loja','boutique','moda','roupa','vestuario','vestuário','calcado','calçado','acessorio','acessório','bijuteria','joalheria'] },
+];
+
+function getIcp(nicho, segmento) {
+  const txt = ((nicho || '') + ' ' + (segmento || '')).toLowerCase().replace(/_/g, ' ');
+  for (const g of NICHO_GRUPOS) {
+    if (g.terms.some(t => txt.includes(t))) return { pts: g.pts, label: g.label, color: g.color };
+  }
+  return { pts: 5, label: 'Outros', color: '#64748B' };
+}
+
+function calcScore(lead) {
+  const icp = getIcp(lead.nicho_cliente, lead.segmento);
+
+  let maturidade = 0;
+  if (lead.anuncia_meta    === 'sim') maturidade += 15;
+  if (lead.anuncia_google  === 'sim') maturidade += 10;
+  if ((lead.meta_ads_count || 0) > 10) maturidade += 5;
+
+  let dor = 0;
+  const nota  = parseFloat(lead.maps_nota)         || 0;
+  const avals = parseInt(lead.maps_avaliacoes)     || 0;
+  const rec   = parseInt(lead.maps_recencia_dias)  || 0;
+  if (nota  > 0 && nota  < 4.2) dor += 15;
+  if (avals > 0 && avals < 50 ) dor += 10;
+  if (rec   > 90             ) dor += 5;
+  if (lead.anuncia_meta !== 'sim' && lead.anuncia_google !== 'sim') dor += 10;
+
+  let momento = 0;
+  const tempo = (lead.tempo_mercado || '').toLowerCase();
+  if (/0-1|menos de 1|recente|novo/.test(tempo)) momento += 15;
+  else if (/1-2/.test(tempo)) momento += 10;
+  if (lead.novo_nesta_rodada) momento += 5;
+
+  const statusMap = {
+    ganhou: 20, agendado: 20, respondeu: 15, qualificando: 10,
+    abordado: 5, novo: 0,
+    sem_resposta: -20, aguardando_decisor: -15, perdeu: -20, desqualificado: -20,
+  };
+  const comportamento = statusMap[lead.status] ?? 0;
+
+  let anti = 0;
+  if (lead.status === 'aguardando_decisor') anti -= 25;
+  if (lead.status === 'sem_resposta')       anti -= 15;
+  if (lead.status === 'desqualificado')     anti -= 10;
+
+  const total = icp.pts + maturidade + dor + momento + comportamento + anti;
+  return { total, icp: icp.pts, maturidade, dor, momento, comportamento, anti, nichoLabel: icp.label, nichoColor: icp.color };
+}
+
+function classify(score) {
+  if (score <= 20) return { label: 'FRIO',       color: '#64748B', bg: 'rgba(100,116,139,0.15)', icon: '❄️', action: 'Nurturing automatizado' };
+  if (score <= 50) return { label: 'CURIOSO',     color: '#FFB800', bg: 'rgba(255,184,0,0.15)',   icon: '👀', action: 'Qualificação adicional' };
+  if (score <= 75) return { label: 'QUALIFICADO', color: '#00D4FF', bg: 'rgba(0,212,255,0.15)',   icon: '🎯', action: 'Preparar proposta' };
+  return              { label: 'PRIORIDADE',   color: '#FF4D6D', bg: 'rgba(255,77,109,0.15)', icon: '🔥', action: 'Ação imediata — 24h' };
+}
+
+// ================================================================
+// STATE
+// ================================================================
+let scoredLeads  = [];
+let currentFilter = 'all';
+
+// ================================================================
+// TAB NAVIGATION
+// ================================================================
+function setTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.getElementById('tab-' + tab).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const active = btn.dataset.tab === tab;
+    btn.style.borderBottomColor = active ? '#FF4D6D' : 'transparent';
+    btn.style.color      = active ? '#F8FAFC' : '#64748B';
+    btn.style.fontWeight = active ? '700'     : '500';
+  });
+}
+
+// ================================================================
+// FETCH & SCORE
+// ================================================================
+async function loadData() {
+  setStatus('buscando leads...');
+  try {
+    let all = [], from = 0;
+    while (true) {
+      const { data, error } = await crmDb.from('leads').select('*').eq('agencia', CRM_AGENCIA).range(from, from + 999);
+      if (error) throw error;
+      all = all.concat(data || []);
+      if (!data || data.length < 1000) break;
+      from += 1000;
+    }
+
+    scoredLeads = all.map(lead => {
+      const s   = calcScore(lead);
+      const cls = classify(s.total);
+      return { ...lead, _s: s, _cls: cls };
+    }).sort((a, b) => b._s.total - a._s.total);
+
+    setStatus(scoredLeads.length + ' leads');
+    renderOverview();
+    renderNichos();
+    buildFilterBtns();
+    renderRanking();
+    renderAbordagens();
+    setTab('overview');
+    loadLastSync();
+  } catch (err) {
+    setStatus('Erro: ' + err.message);
+    console.error(err);
+  }
+}
+
+async function loadLastSync() {
+  try {
+    const { data } = await scoreDb.from('lead_scores').select('sincronizado_em').order('sincronizado_em', { ascending: false }).limit(1);
+    if (data && data[0]) {
+      const d = new Date(data[0].sincronizado_em);
+      document.getElementById('last-sync').textContent =
+        'sync ' + d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+  } catch (_) {}
+}
+
+// ================================================================
+// SAVE SCORES → novo Supabase
+// ================================================================
+async function saveScores() {
+  const btn = document.getElementById('sync-btn');
+  btn.textContent = 'Salvando...';
+  btn.style.opacity = '0.6';
+  btn.disabled = true;
+
+  const rows = scoredLeads.map(l => ({
+    lead_id:             l.id,
+    lead_nome:           l.nome           || null,
+    nicho:               l.nicho_cliente  || l.segmento || null,
+    nicho_label:         l._s.nichoLabel,
+    cidade:              l.cidade         || null,
+    status:              l.status         || 'novo',
+    score_icp:           l._s.icp,
+    score_maturidade:    l._s.maturidade,
+    score_dor:           l._s.dor,
+    score_momento:       l._s.momento,
+    score_comportamento: l._s.comportamento,
+    score_anti:          l._s.anti,
+    score_total:         l._s.total,
+    classificacao:       l._cls.label,
+    sincronizado_em:     new Date().toISOString(),
+  }));
+
+  try {
+    for (let i = 0; i < rows.length; i += 100) {
+      const { error } = await scoreDb.from('lead_scores').upsert(rows.slice(i, i + 100), { onConflict: 'lead_id' });
+      if (error) throw error;
+    }
+    btn.textContent = '✓ ' + rows.length + ' scores salvos';
+    btn.style.color       = '#34D399';
+    btn.style.borderColor = 'rgba(52,211,153,0.3)';
+    btn.style.background  = 'rgba(52,211,153,0.1)';
+    btn.style.opacity     = '1';
+    loadLastSync();
+    setTimeout(() => {
+      btn.textContent      = '↑ Salvar Scores';
+      btn.style.color      = '#3B82F6';
+      btn.style.borderColor = 'rgba(59,130,246,0.25)';
+      btn.style.background  = 'rgba(59,130,246,0.12)';
+      btn.disabled = false;
+    }, 3000);
+  } catch (err) {
+    btn.textContent  = 'Erro ao salvar';
+    btn.style.color  = '#FF4D6D';
+    btn.style.opacity = '1';
+    btn.disabled = false;
+    console.error(err);
+  }
+}
+
+function setStatus(msg) { document.getElementById('load-status').textContent = msg; }
+
+// ================================================================
+// RENDER: VISÃO GERAL
+// ================================================================
+function renderOverview() {
+  const total = scoredLeads.length;
+  const counts = { FRIO: 0, CURIOSO: 0, QUALIFICADO: 0, PRIORIDADE: 0 };
+  scoredLeads.forEach(l => counts[l._cls.label]++);
+  const avgScore = total ? Math.round(scoredLeads.reduce((a, l) => a + l._s.total, 0) / total) : 0;
+  const topScore = scoredLeads[0]?._s.total || 0;
+
+  const kpis = [
+    { label: 'Total de Leads', value: total,              color: '#94A3B8', sub: 'na base Yonzza' },
+    { label: 'Prioridade',     value: counts.PRIORIDADE,  color: '#FF4D6D', sub: '🔥 ação imediata' },
+    { label: 'Qualificados',   value: counts.QUALIFICADO, color: '#00D4FF', sub: '🎯 preparar proposta' },
+    { label: 'Score Médio',    value: avgScore,            color: '#A78BFA', sub: 'pts · top: ' + topScore },
+  ];
+
+  document.getElementById('kpi-cards').innerHTML = kpis.map(k => `
+    <div class="card" style="padding: 20px;">
+      <div style="font-size: 10px; color: #475569; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 8px;">${k.label.toUpperCase()}</div>
+      <div style="font-size: 44px; font-weight: 900; color: ${k.color}; font-family: 'JetBrains Mono', monospace; line-height: 1;">${k.value}</div>
+      <div style="font-size: 11px; color: #64748B; margin-top: 6px;">${k.sub}</div>
+    </div>
+  `).join('');
+
+  const clsCfg = {
+    FRIO:       { color: '#64748B', icon: '❄️' },
+    CURIOSO:    { color: '#FFB800', icon: '👀' },
+    QUALIFICADO:{ color: '#00D4FF', icon: '🎯' },
+    PRIORIDADE: { color: '#FF4D6D', icon: '🔥' },
+  };
+
+  document.getElementById('cls-dist').innerHTML = `
+    <div style="font-size: 10px; color: #475569; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 16px;">DISTRIBUIÇÃO POR TEMPERATURA</div>
+    ${Object.entries(counts).map(([lbl, cnt]) => {
+      const pct = total ? Math.round((cnt / total) * 100) : 0;
+      const cfg = clsCfg[lbl];
+      return `
+        <div style="margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span style="font-size: 12px; color: ${cfg.color}; font-weight: 600;">${cfg.icon} ${lbl}</span>
+            <span style="font-size: 12px; color: #64748B; font-family: 'JetBrains Mono', monospace;">${cnt} <span style="color: #334155;">(${pct}%)</span></span>
+          </div>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${pct}%; background:${cfg.color};"></div></div>
+        </div>`;
+    }).join('')}
+  `;
+
+  const nichoCounts = {};
+  const nichoColors = {};
+  scoredLeads.forEach(l => {
+    nichoCounts[l._s.nichoLabel] = (nichoCounts[l._s.nichoLabel] || 0) + 1;
+    nichoColors[l._s.nichoLabel] = l._s.nichoColor;
+  });
+  const sortedNichos = Object.entries(nichoCounts).sort((a, b) => b[1] - a[1]);
+
+  document.getElementById('nicho-dist').innerHTML = `
+    <div style="font-size: 10px; color: #475569; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 16px;">LEADS POR CATEGORIA DE NICHO</div>
+    ${sortedNichos.map(([lbl, cnt]) => {
+      const pct   = total ? Math.round((cnt / total) * 100) : 0;
+      const color = nichoColors[lbl] || '#64748B';
+      return `
+        <div style="margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span style="font-size: 12px; color: ${color}; font-weight: 600;">${lbl}</span>
+            <span style="font-size: 12px; color: #64748B; font-family: 'JetBrains Mono', monospace;">${cnt} <span style="color:#334155;">(${pct}%)</span></span>
+          </div>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${pct}%; background:${color};"></div></div>
+        </div>`;
+    }).join('')}
+  `;
+}
+
+// ================================================================
+// RENDER: POR NICHO
+// ================================================================
+function renderNichos() {
+  const groups = {};
+  scoredLeads.forEach(l => {
+    const lbl = l._s.nichoLabel;
+    if (!groups[lbl]) groups[lbl] = { leads: [], color: l._s.nichoColor };
+    groups[lbl].leads.push(l);
+  });
+
+  const sorted = Object.entries(groups).sort((a, b) => b[1].leads.length - a[1].leads.length);
+
+  document.getElementById('nichos-grid').innerHTML = sorted.map(([lbl, grp]) => {
+    const leads    = grp.leads;
+    const color    = grp.color;
+    const avgScore = Math.round(leads.reduce((a, l) => a + l._s.total, 0) / leads.length);
+    const cls      = classify(avgScore);
+    const prior    = leads.filter(l => l._cls.label === 'PRIORIDADE').length;
+    const qual     = leads.filter(l => l._cls.label === 'QUALIFICADO').length;
+    const frio     = leads.filter(l => l._cls.label === 'FRIO').length;
+
+    const subMap = {};
+    leads.forEach(l => {
+      const n = (l.nicho_cliente || l.segmento || 'não identificado').replace(/_/g, ' ');
+      subMap[n] = (subMap[n] || 0) + 1;
+    });
+    const topSubs = Object.entries(subMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    const subScores = {};
+    leads.forEach(l => {
+      const n = (l.nicho_cliente || l.segmento || 'não identificado').replace(/_/g, ' ');
+      if (!subScores[n]) subScores[n] = [];
+      subScores[n].push(l._s.total);
+    });
+    const bestSub = Object.entries(subScores)
+      .map(([n, ss]) => ({ n, avg: Math.round(ss.reduce((a, b) => a + b, 0) / ss.length) }))
+      .sort((a, b) => b.avg - a.avg)[0];
+
+    return `
+      <div style="background:rgba(255,255,255,0.02); border:1px solid ${color}22; border-radius:14px; padding:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+          <div>
+            <div style="font-size:14px; font-weight:800; color:${color};">${lbl}</div>
+            <div style="font-size:11px; color:#475569; margin-top:2px;">${leads.length} lead${leads.length !== 1 ? 's' : ''}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:34px; font-weight:900; color:${cls.color}; font-family:'JetBrains Mono',monospace; line-height:1;">${avgScore}</div>
+            <div style="font-size:9px; color:#475569; margin-top:1px;">score médio</div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:14px;">
+          <div style="text-align:center; padding:8px; border-radius:8px; background:rgba(255,77,109,0.08);">
+            <div style="font-size:20px; font-weight:900; color:#FF4D6D; font-family:'JetBrains Mono',monospace;">${prior}</div>
+            <div style="font-size:9px; color:#64748B;">🔥 Prior.</div>
+          </div>
+          <div style="text-align:center; padding:8px; border-radius:8px; background:rgba(0,212,255,0.08);">
+            <div style="font-size:20px; font-weight:900; color:#00D4FF; font-family:'JetBrains Mono',monospace;">${qual}</div>
+            <div style="font-size:9px; color:#64748B;">🎯 Qualif.</div>
+          </div>
+          <div style="text-align:center; padding:8px; border-radius:8px; background:rgba(100,116,139,0.08);">
+            <div style="font-size:20px; font-weight:900; color:#64748B; font-family:'JetBrains Mono',monospace;">${frio}</div>
+            <div style="font-size:9px; color:#64748B;">❄️ Frio</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <div style="font-size:9px; color:#475569; font-weight:700; letter-spacing:0.08em; margin-bottom:8px;">SUB-NICHOS</div>
+          ${topSubs.map(([sub, cnt]) => `
+            <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+              <span style="font-size:11px; color:#94A3B8; text-transform:capitalize;">${sub}</span>
+              <span style="font-size:11px; color:#475569; font-family:'JetBrains Mono',monospace;">${cnt}</span>
+            </div>
+          `).join('')}
+        </div>
+
+        ${bestSub ? `
+          <div style="background:${color}11; border:1px solid ${color}22; border-radius:8px; padding:10px;">
+            <div style="font-size:9px; color:${color}; font-weight:700; letter-spacing:0.08em; margin-bottom:3px;">MELHOR SUB-NICHO POR SCORE</div>
+            <div style="font-size:12px; color:#E2E8F0; text-transform:capitalize;">${bestSub.n}</div>
+            <div style="font-size:11px; color:#64748B; margin-top:2px;">Score médio: <span style="color:${color}; font-weight:700; font-family:'JetBrains Mono',monospace;">${bestSub.avg}</span></div>
+          </div>
+        ` : ''}
+      </div>`;
+  }).join('');
+}
+
+// ================================================================
+// RENDER: RANKING
+// ================================================================
+function buildFilterBtns() {
+  const filters = [
+    { key: 'all',        label: 'Todos',        color: '#94A3B8' },
+    { key: 'PRIORIDADE', label: '🔥 Prioridade', color: '#FF4D6D' },
+    { key: 'QUALIFICADO',label: '🎯 Qualificado',color: '#00D4FF' },
+    { key: 'CURIOSO',    label: '👀 Curioso',    color: '#FFB800' },
+    { key: 'FRIO',       label: '❄️ Frio',       color: '#64748B' },
+  ];
+  document.getElementById('filter-btns').innerHTML = filters.map(f => `
+    <button onclick="applyFilter('${f.key}')" data-filter="${f.key}" class="filter-btn text-xs px-3 py-1.5 rounded-full font-semibold"
+      style="background:rgba(255,255,255,0.03); color:#64748B; border:1px solid rgba(255,255,255,0.06);">
+      ${f.label}
+    </button>
+  `).join('');
+  applyFilter('all');
+}
+
+function applyFilter(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('[data-filter]').forEach(btn => {
+    const active = btn.dataset.filter === filter;
+    btn.style.background  = active ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
+    btn.style.color       = active ? '#E2E8F0' : '#64748B';
+    btn.style.border      = active ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(255,255,255,0.06)';
+  });
+  renderRanking();
+}
+
+function renderRanking() {
+  const leads = currentFilter === 'all' ? scoredLeads : scoredLeads.filter(l => l._cls.label === currentFilter);
+  document.getElementById('ranking-count').textContent = leads.length + ' leads';
+
+  const statusColors = {
+    novo: '#737373', abordado: '#3B82F6', respondeu: '#8B5CF6', qualificando: '#8B5CF6',
+    agendado: '#F59E0B', ganhou: '#10B981', perdeu: '#EF4444',
+    sem_resposta: '#EF4444', aguardando_decisor: '#F97316', desqualificado: '#EF4444',
+  };
+
+  document.getElementById('ranking-table').innerHTML = `
+    <div class="card" style="overflow:hidden;">
+      <div style="display:grid; grid-template-columns:36px 1fr 160px 120px 140px 80px; padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.06);">
+        ${['#','LEAD','NICHO','STATUS','CLASSIFICAÇÃO','SCORE'].map(h =>
+          `<span style="font-size:9px; color:#475569; font-weight:700; letter-spacing:0.08em;">${h}</span>`
+        ).join('')}
+      </div>
+      ${leads.slice(0, 150).map((lead, i) => {
+        const cls    = lead._cls;
+        const sColor = statusColors[lead.status] || '#737373';
+        const nome   = (lead.nome || '').replace(/\s*\|.*$/, '').trim();
+        return `
+          <div class="lead-row" style="display:grid; grid-template-columns:36px 1fr 160px 120px 140px 80px; padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.04); align-items:center; ${i%2 ? 'background:rgba(255,255,255,0.01);' : ''}">
+            <span style="font-size:10px; color:#334155; font-family:'JetBrains Mono',monospace;">${i+1}</span>
+            <div>
+              <div style="font-size:12px; font-weight:600; color:#E2E8F0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px;" title="${lead.nome || ''}">${nome || 'Sem nome'}</div>
+              <div style="font-size:10px; color:#475569; margin-top:1px;">${lead.cidade || ''}</div>
+            </div>
+            <span style="font-size:11px; color:#94A3B8;">${lead._s.nichoLabel}</span>
+            <span style="font-size:10px; color:${sColor}; font-weight:600; text-transform:capitalize;">${(lead.status||'novo').replace(/_/g,' ')}</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <span style="font-size:13px;">${cls.icon}</span>
+              <span style="font-size:11px; color:${cls.color}; font-weight:700;">${cls.label}</span>
+            </div>
+            <div style="text-align:right;">
+              <span style="font-size:18px; font-weight:900; color:${cls.color}; font-family:'JetBrains Mono',monospace;">${lead._s.total}</span>
+            </div>
+          </div>`;
+      }).join('')}
+      ${leads.length > 150 ? `<div style="padding:12px 16px; font-size:11px; color:#475569; text-align:center;">Mostrando 150 de ${leads.length} leads</div>` : ''}
+      ${leads.length === 0  ? `<div style="padding:40px; font-size:13px; color:#475569; text-align:center;">Nenhum lead nesta categoria</div>` : ''}
+    </div>`;
+}
+
+// ================================================================
+// RENDER: ABORDAGENS POR NICHO
+// ================================================================
+function renderAbordagens() {
+  const groups = {};
+  scoredLeads.forEach(l => {
+    if (l._s.total < 25) return;
+    const lbl = l._s.nichoLabel;
+    if (!groups[lbl]) groups[lbl] = { leads: [], rapports: [], ganchos: [], color: l._s.nichoColor };
+    const r = Array.isArray(l.rapport_humano) ? l.rapport_humano : [];
+    const g = Array.isArray(l.gancho_dor)     ? l.gancho_dor     : [];
+    groups[lbl].rapports.push(...r.filter(Boolean));
+    groups[lbl].ganchos.push(...g.filter(Boolean));
+    groups[lbl].leads.push(l);
+  });
+
+  const sorted = Object.entries(groups).sort((a, b) => b[1].leads.length - a[1].leads.length);
+
+  const html = sorted.map(([lbl, grp]) => {
+    const color    = grp.color;
+    const avgScore = Math.round(grp.leads.reduce((a, l) => a + l._s.total, 0) / grp.leads.length);
+    const rapports = [...new Set(grp.rapports)].slice(0, 5);
+    const ganchos  = [...new Set(grp.ganchos)].slice(0, 5);
+    if (!rapports.length && !ganchos.length) return '';
+
+    return `
+      <div style="background:rgba(255,255,255,0.02); border:1px solid ${color}22; border-radius:14px; padding:22px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+          <div>
+            <div style="font-size:15px; font-weight:800; color:${color};">${lbl}</div>
+            <div style="font-size:11px; color:#475569; margin-top:2px;">
+              ${grp.leads.length} leads qualificados · Score médio:
+              <span style="color:${color}; font-weight:700; font-family:'JetBrains Mono',monospace;">${avgScore}</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          ${rapports.length ? `
+            <div>
+              <div style="font-size:9px; color:#34D399; font-weight:700; letter-spacing:0.1em; margin-bottom:10px;">RAPPORT DE ABERTURA</div>
+              ${rapports.map(r => `
+                <div style="padding:10px 12px; background:rgba(52,211,153,0.06); border-left:2px solid rgba(52,211,153,0.35); border-radius:0 6px 6px 0; margin-bottom:8px; font-size:12px; color:#94A3B8; line-height:1.6;">${r}</div>
+              `).join('')}
+            </div>` : '<div></div>'}
+          ${ganchos.length ? `
+            <div>
+              <div style="font-size:9px; color:#FF4D6D; font-weight:700; letter-spacing:0.1em; margin-bottom:10px;">GANCHO DE DOR</div>
+              ${ganchos.map(g => `
+                <div style="padding:10px 12px; background:rgba(255,77,109,0.06); border-left:2px solid rgba(255,77,109,0.35); border-radius:0 6px 6px 0; margin-bottom:8px; font-size:12px; color:#94A3B8; line-height:1.6;">${g}</div>
+              `).join('')}
+            </div>` : '<div></div>'}
+        </div>
+      </div>`;
+  }).filter(Boolean).join('');
+
+  document.getElementById('abordagens-content').innerHTML = html ||
+    `<div style="text-align:center; padding:60px; color:#475569; font-size:13px;">
+      Nenhuma abordagem disponível. Os leads precisam ter <code style="color:#64748B;">rapport_humano</code> e <code style="color:#64748B;">gancho_dor</code> preenchidos.
+    </div>`;
+}
+
+// ================================================================
+// INIT
+// ================================================================
+setTab('overview');
+loadData();
+</script>
+</body>
+</html>
