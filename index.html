@@ -71,6 +71,7 @@ html, body { background: #0A0E1A; color: #E2E8F0; font-family: 'Plus Jakarta San
     <button onclick="setTab('nichos')"      data-tab="nichos"      class="tab-btn px-5 py-3 text-sm" style="border-bottom: 2px solid transparent; color: #64748B;">Por Nicho</button>
     <button onclick="setTab('ranking')"     data-tab="ranking"     class="tab-btn px-5 py-3 text-sm" style="border-bottom: 2px solid transparent; color: #64748B;">Ranking</button>
     <button onclick="setTab('abordagens')"  data-tab="abordagens"  class="tab-btn px-5 py-3 text-sm" style="border-bottom: 2px solid transparent; color: #64748B;">Abordagens por Nicho</button>
+    <button onclick="setTab('intel')"       data-tab="intel"       class="tab-btn px-5 py-3 text-sm" style="border-bottom: 2px solid transparent; color: #64748B;">🧠 Inteligência Comercial</button>
   </div>
 </nav>
 
@@ -100,6 +101,46 @@ html, body { background: #0A0E1A; color: #E2E8F0; font-family: 'Plus Jakarta San
       <div class="ml-auto" id="ranking-count" style="font-size: 11px; color: #475569; font-family: 'JetBrains Mono', monospace;"></div>
     </div>
     <div id="ranking-table"></div>
+  </div>
+
+  <!-- TAB: INTELIGÊNCIA COMERCIAL -->
+  <div id="tab-intel" class="tab-content hidden">
+
+    <!-- Seção 1: Ranking de Nichos -->
+    <div style="margin-bottom:32px;">
+      <div style="font-size:13px; font-weight:800; color:#F8FAFC; margin-bottom:4px; letter-spacing:-0.01em;">Ranking de Nichos por Performance</div>
+      <div style="font-size:11px; color:#475569; margin-bottom:16px;">Calculado com base nos leads reais da base — status ganhou, perdeu e sem_resposta</div>
+      <div id="nicho-ranking"></div>
+    </div>
+
+    <!-- Seção 2: DNA do Lead que Fecha vs Ghosta -->
+    <div style="margin-bottom:32px;">
+      <div style="font-size:13px; font-weight:800; color:#F8FAFC; margin-bottom:4px; letter-spacing:-0.01em;">DNA do Lead que Fecha vs que Ghosta</div>
+      <div style="font-size:11px; color:#475569; margin-bottom:16px;">Perfil comparativo entre leads convertidos e perdidos</div>
+      <div id="dna-comparison" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;"></div>
+    </div>
+
+    <!-- Seção 3: Sinais de Compra e Ghosting -->
+    <div style="margin-bottom:32px;">
+      <div style="font-size:13px; font-weight:800; color:#F8FAFC; margin-bottom:4px; letter-spacing:-0.01em;">Sinais que Antecipam Compra × Ghosting</div>
+      <div style="font-size:11px; color:#475569; margin-bottom:16px;">Força do sinal = frequência em fechados − frequência em perdidos</div>
+      <div id="sinais-compra" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;"></div>
+    </div>
+
+    <!-- Seção 4: Frases que Fecham -->
+    <div style="margin-bottom:32px;">
+      <div style="font-size:13px; font-weight:800; color:#F8FAFC; margin-bottom:4px; letter-spacing:-0.01em;">Frases & Ganchos de Leads que Fecharam</div>
+      <div style="font-size:11px; color:#475569; margin-bottom:16px;">Rapport e ganchos de dor usados em leads com status <span style="color:#10B981;">ganhou</span> ou <span style="color:#F59E0B;">agendado</span></div>
+      <div id="frases-fecham" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;"></div>
+    </div>
+
+    <!-- Seção 5: Padrão de Timing -->
+    <div style="margin-bottom:32px;">
+      <div style="font-size:13px; font-weight:800; color:#F8FAFC; margin-bottom:4px; letter-spacing:-0.01em;">Padrão de Timing & Perfil de Compra</div>
+      <div style="font-size:11px; color:#475569; margin-bottom:16px;">Características mais comuns entre quem contrata</div>
+      <div id="timing-pattern" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;"></div>
+    </div>
+
   </div>
 
   <!-- TAB: ABORDAGENS -->
@@ -243,6 +284,7 @@ async function loadData() {
     buildFilterBtns();
     renderRanking();
     renderAbordagens();
+    renderIntel();
     setTab('overview');
     loadLastSync();
   } catch (err) {
@@ -612,6 +654,244 @@ function renderAbordagens() {
   document.getElementById('abordagens-content').innerHTML = html ||
     `<div style="text-align:center; padding:60px; color:#475569; font-size:13px;">
       Nenhuma abordagem disponível. Os leads precisam ter <code style="color:#64748B;">rapport_humano</code> e <code style="color:#64748B;">gancho_dor</code> preenchidos.
+    </div>`;
+}
+
+// ================================================================
+// RENDER: INTELIGÊNCIA COMERCIAL
+// ================================================================
+function renderIntel() {
+  const ganhou      = scoredLeads.filter(l => l.status === 'ganhou');
+  const agendado    = scoredLeads.filter(l => l.status === 'agendado');
+  const perdidos    = scoredLeads.filter(l => ['perdeu','desqualificado'].includes(l.status));
+  const ghosting    = scoredLeads.filter(l => l.status === 'sem_resposta');
+  const convertidos = [...ganhou, ...agendado]; // fechou ou está prestes a fechar
+  const ruins      = [...perdidos, ...ghosting];
+
+  // ── 1. RANKING DE NICHOS ──────────────────────────────────────
+  const nichoStats = {};
+  scoredLeads.forEach(l => {
+    const n = l._s.nichoLabel;
+    if (!nichoStats[n]) nichoStats[n] = { total:0, ganhou:0, agendado:0, ghosting:0, perdeu:0, scores:[], color: l._s.nichoColor };
+    nichoStats[n].total++;
+    nichoStats[n].scores.push(l._s.total);
+    if (l.status === 'ganhou')      nichoStats[n].ganhou++;
+    if (l.status === 'agendado')    nichoStats[n].agendado++;
+    if (l.status === 'sem_resposta')nichoStats[n].ghosting++;
+    if (['perdeu','desqualificado'].includes(l.status)) nichoStats[n].perdeu++;
+  });
+
+  const nichoRows = Object.entries(nichoStats).map(([n, s]) => {
+    const fechRate   = s.total ? Math.round(((s.ganhou + s.agendado) / s.total) * 100) : 0;
+    const ghostRate  = s.total ? Math.round((s.ghosting / s.total) * 100) : 0;
+    const avgScore   = s.scores.length ? Math.round(s.scores.reduce((a,b)=>a+b,0)/s.scores.length) : 0;
+    const indice     = fechRate - ghostRate;
+    return { n, ...s, fechRate, ghostRate, avgScore, indice };
+  }).sort((a,b) => b.indice - a.indice);
+
+  const totalLeads = scoredLeads.length;
+  document.getElementById('nicho-ranking').innerHTML = `
+    <div class="card" style="overflow:hidden;">
+      <div style="display:grid; grid-template-columns:180px 70px repeat(5,1fr); padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.06); gap:8px;">
+        ${['NICHO','LEADS','FECHADOS','GHOSTING','PERDIDOS','SCORE MÉD.','ÍNDICE'].map(h=>
+          `<span style="font-size:9px;color:#475569;font-weight:700;letter-spacing:0.08em;">${h}</span>`
+        ).join('')}
+      </div>
+      ${nichoRows.map((r,i) => {
+        const idxColor = r.indice > 10 ? '#34D399' : r.indice > 0 ? '#FFB800' : '#FF4D6D';
+        return `
+          <div style="display:grid; grid-template-columns:180px 70px repeat(5,1fr); padding:11px 16px; border-bottom:1px solid rgba(255,255,255,0.04); align-items:center; gap:8px; ${i%2?'background:rgba(255,255,255,0.01);':''}">
+            <span style="font-size:12px;font-weight:700;color:${r.color};">${r.n}</span>
+            <span style="font-size:11px;color:#64748B;font-family:'JetBrains Mono',monospace;">${r.total}</span>
+            <div>
+              <span style="font-size:13px;font-weight:900;color:#10B981;font-family:'JetBrains Mono',monospace;">${r.fechRate}%</span>
+              <div style="font-size:9px;color:#475569;">${r.ganhou}✓ + ${r.agendado}⏳</div>
+            </div>
+            <span style="font-size:13px;font-weight:700;color:#EF4444;font-family:'JetBrains Mono',monospace;">${r.ghostRate}%</span>
+            <span style="font-size:13px;font-weight:700;color:#64748B;font-family:'JetBrains Mono',monospace;">${r.perdeu}</span>
+            <span style="font-size:13px;font-weight:700;color:#A78BFA;font-family:'JetBrains Mono',monospace;">${r.avgScore}</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:15px;font-weight:900;color:${idxColor};font-family:'JetBrains Mono',monospace;">${r.indice>0?'+':''}${r.indice}</span>
+              ${r.indice > 10 ? '<span style="font-size:10px;">💰</span>' : r.indice < 0 ? '<span style="font-size:10px;">⚠️</span>' : ''}
+            </div>
+          </div>`;
+      }).join('')}
+      <div style="padding:10px 16px; font-size:10px; color:#334155; border-top:1px solid rgba(255,255,255,0.04);">
+        Índice = % Fechados − % Ghosting. Quanto maior, mais saudável o nicho. 💰 = nicho premium.
+      </div>
+    </div>`;
+
+  // ── 2. DNA COMPARATIVO ────────────────────────────────────────
+  function pct(arr, fn) {
+    if (!arr.length) return 0;
+    return Math.round((arr.filter(fn).length / arr.length) * 100);
+  }
+  function avg(arr, fn) {
+    if (!arr.length) return 0;
+    return Math.round(arr.reduce((a,l)=>a+fn(l),0)/arr.length);
+  }
+
+  const dnaItems = [
+    { label: 'Anuncia no Meta',        convFn: l => l.anuncia_meta === 'sim',           lostFn: l => l.anuncia_meta === 'sim',           fmt: '%' },
+    { label: 'Anuncia no Google',      convFn: l => l.anuncia_google === 'sim',         lostFn: l => l.anuncia_google === 'sim',         fmt: '%' },
+    { label: 'Meta Ads > 10 anúncios', convFn: l => (l.meta_ads_count||0) > 10,        lostFn: l => (l.meta_ads_count||0) > 10,        fmt: '%' },
+    { label: 'Score médio',            convFn: l => l._s.total,                          lostFn: l => l._s.total,                         fmt: 'avg' },
+    { label: 'ICP médio',              convFn: l => l._s.icp,                            lostFn: l => l._s.icp,                           fmt: 'avg' },
+    { label: 'Maturidade média',       convFn: l => l._s.maturidade,                    lostFn: l => l._s.maturidade,                   fmt: 'avg' },
+    { label: 'Tempo mercado 0-2 anos', convFn: l => /0-1|1-2|menos/.test((l.tempo_mercado||'').toLowerCase()), lostFn: l => /0-1|1-2|menos/.test((l.tempo_mercado||'').toLowerCase()), fmt: '%' },
+    { label: 'Google Maps nota < 4.2', convFn: l => parseFloat(l.maps_nota)>0 && parseFloat(l.maps_nota)<4.2, lostFn: l => parseFloat(l.maps_nota)>0 && parseFloat(l.maps_nota)<4.2, fmt: '%' },
+  ];
+
+  function dnaCard(title, leads, color, icon, emptyMsg) {
+    if (!leads.length) return `<div class="card" style="padding:20px;border-color:${color}22;"><div style="font-size:12px;font-weight:800;color:${color};margin-bottom:12px;">${icon} ${title}</div><div style="font-size:12px;color:#475569;">${emptyMsg}</div></div>`;
+
+    const topNicho = (() => {
+      const m={}; leads.forEach(l=>{m[l._s.nichoLabel]=(m[l._s.nichoLabel]||0)+1;}); return Object.entries(m).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
+    })();
+
+    return `
+      <div class="card" style="padding:20px; border-color:${color}33;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div style="font-size:12px;font-weight:800;color:${color};">${icon} ${title}</div>
+          <div style="font-size:22px;font-weight:900;color:${color};font-family:'JetBrains Mono',monospace;">${leads.length}</div>
+        </div>
+        <div style="font-size:10px;color:#475569;margin-bottom:10px;">NICHO DOMINANTE: <span style="color:${color};font-weight:700;">${topNicho}</span></div>
+        ${dnaItems.map(item => {
+          const val = item.fmt === '%' ? pct(leads, item.convFn) + '%' : avg(leads, item.convFn) + ' pts';
+          return `
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+              <span style="font-size:11px;color:#94A3B8;">${item.label}</span>
+              <span style="font-size:11px;font-weight:700;color:${color};font-family:'JetBrains Mono',monospace;">${val}</span>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  document.getElementById('dna-comparison').innerHTML =
+    dnaCard('Leads que Fecharam', convertidos, '#10B981', '💰', 'Nenhum lead com status ganhou ou agendado ainda.') +
+    dnaCard('Leads Perdidos / Ghosting', ruins, '#EF4444', '👻', 'Nenhum lead perdido ainda.');
+
+  // ── 3. SINAIS DE COMPRA VS GHOSTING ──────────────────────────
+  const sinais = [
+    { label: 'Anuncia no Meta',         fn: l => l.anuncia_meta === 'sim' },
+    { label: 'Anuncia no Google',        fn: l => l.anuncia_google === 'sim' },
+    { label: '> 10 anúncios ativos',    fn: l => (l.meta_ads_count||0) > 10 },
+    { label: 'ICP primário (≥20 pts)',   fn: l => l._s.icp >= 20 },
+    { label: 'Score total > 50',         fn: l => l._s.total > 50 },
+    { label: 'Google Maps nota baixa',   fn: l => parseFloat(l.maps_nota)>0 && parseFloat(l.maps_nota)<4.2 },
+    { label: 'Pouca avaliações (< 50)',  fn: l => parseInt(l.maps_avaliacoes)>0 && parseInt(l.maps_avaliacoes)<50 },
+    { label: 'Negócio novo (0-2 anos)', fn: l => /0-1|1-2|menos/.test((l.tempo_mercado||'').toLowerCase()) },
+    { label: 'Lead recente (novo)',       fn: l => l.novo_nesta_rodada },
+    { label: 'Sem qualquer anúncio',     fn: l => l.anuncia_meta !== 'sim' && l.anuncia_google !== 'sim' },
+  ];
+
+  function sinalStrength(sinal, positivos, negativos) {
+    const posRate = positivos.length ? Math.round((positivos.filter(sinal.fn).length / positivos.length)*100) : 0;
+    const negRate = negativos.length ? Math.round((negativos.filter(sinal.fn).length / negativos.length)*100) : 0;
+    return { ...sinal, posRate, negRate, delta: posRate - negRate };
+  }
+
+  const sinaisCompra  = sinais.map(s => sinalStrength(s, convertidos, ruins)).filter(s => s.delta > 0).sort((a,b)=>b.delta-a.delta);
+  const sinaisGhosting= sinais.map(s => sinalStrength(s, ruins, convertidos)).filter(s => s.delta > 0).sort((a,b)=>b.delta-a.delta);
+
+  function sinaisCard(title, items, color, icon) {
+    if (!items.length) return `<div class="card" style="padding:20px;"><div style="font-size:12px;font-weight:800;color:${color};margin-bottom:12px;">${icon} ${title}</div><div style="font-size:12px;color:#475569;">Dados insuficientes — continue trabalhando a base.</div></div>`;
+    return `
+      <div class="card" style="padding:20px;border-color:${color}22;">
+        <div style="font-size:12px;font-weight:800;color:${color};margin-bottom:14px;">${icon} ${title}</div>
+        ${items.map(s => `
+          <div style="margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span style="font-size:12px;color:#E2E8F0;font-weight:600;">${s.label}</span>
+              <span style="font-size:11px;color:${color};font-weight:700;font-family:'JetBrains Mono',monospace;">+${s.delta}pp</span>
+            </div>
+            <div style="font-size:10px;color:#475569;margin-bottom:4px;">Aparece em ${s.posRate}% dos ${icon==='💰'?'fechamentos':'ghostings'} vs ${s.negRate}% do oposto</div>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${Math.min(s.posRate,100)}%;background:${color};"></div></div>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  document.getElementById('sinais-compra').innerHTML =
+    sinaisCard('Sinais que Antecipam Compra', sinaisCompra, '#10B981', '💰') +
+    sinaisCard('Sinais que Antecipam Ghosting', sinaisGhosting, '#EF4444', '👻');
+
+  // ── 4. FRASES QUE FECHAM ──────────────────────────────────────
+  const leadsQueFecharam = scoredLeads.filter(l => ['ganhou','agendado'].includes(l.status));
+  const fechamRapports   = [...new Set(leadsQueFecharam.flatMap(l => Array.isArray(l.rapport_humano) ? l.rapport_humano : []).filter(Boolean))].slice(0,6);
+  const fechamGanchos    = [...new Set(leadsQueFecharam.flatMap(l => Array.isArray(l.gancho_dor) ? l.gancho_dor : []).filter(Boolean))].slice(0,6);
+
+  function frasesCard(title, frases, color, icon, desc) {
+    if (!frases.length) return `<div class="card" style="padding:20px;"><div style="font-size:12px;font-weight:800;color:${color};margin-bottom:8px;">${icon} ${title}</div><div style="font-size:12px;color:#475569;">Ainda sem leads fechados com rapport registrado. Continue nutrindo a base.</div></div>`;
+    return `
+      <div class="card" style="padding:20px;border-color:${color}22;">
+        <div style="font-size:12px;font-weight:800;color:${color};margin-bottom:4px;">${icon} ${title}</div>
+        <div style="font-size:10px;color:#475569;margin-bottom:14px;">${desc}</div>
+        ${frases.map(f => `
+          <div style="padding:10px 12px;background:${color}09;border-left:2px solid ${color}55;border-radius:0 6px 6px 0;margin-bottom:8px;font-size:12px;color:#94A3B8;line-height:1.6;">${f}</div>
+        `).join('')}
+      </div>`;
+  }
+
+  document.getElementById('frases-fecham').innerHTML =
+    frasesCard('Rapport que Aparece em Fechamentos', fechamRapports, '#10B981', '✅', 'Frases de abertura usadas com leads que converteram') +
+    frasesCard('Ganchos de Dor em Fechamentos', fechamGanchos, '#F59E0B', '🎯', 'Dores identificadas nos leads que finalmente contrataram');
+
+  // ── 5. TIMING & PADRÃO ───────────────────────────────────────
+  const tempoMap = {};
+  convertidos.forEach(l => {
+    const t = l.tempo_mercado || 'não informado';
+    tempoMap[t] = (tempoMap[t]||0)+1;
+  });
+  const topTempo = Object.entries(tempoMap).sort((a,b)=>b[1]-a[1]).slice(0,4);
+
+  const nichoConvMap = {};
+  convertidos.forEach(l => { nichoConvMap[l._s.nichoLabel] = (nichoConvMap[l._s.nichoLabel]||0)+1; });
+  const topNichoConv = Object.entries(nichoConvMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  const statusFlowMap = {};
+  scoredLeads.forEach(l => {
+    const s = l.status || 'novo';
+    statusFlowMap[s] = (statusFlowMap[s]||0)+1;
+  });
+
+  const statusColors2 = { novo:'#737373', abordado:'#3B82F6', respondeu:'#8B5CF6', qualificando:'#8B5CF6', agendado:'#F59E0B', ganhou:'#10B981', perdeu:'#EF4444', sem_resposta:'#EF4444', aguardando_decisor:'#F97316', desqualificado:'#EF4444' };
+
+  document.getElementById('timing-pattern').innerHTML = `
+    <div class="card" style="padding:20px;">
+      <div style="font-size:11px;font-weight:800;color:#10B981;margin-bottom:14px;">💰 Nichos que Mais Fecham</div>
+      ${topNichoConv.length ? topNichoConv.map(([n,c],i) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:11px;color:#475569;font-family:'JetBrains Mono',monospace;">${i+1}</span>
+            <span style="font-size:12px;color:#E2E8F0;">${n}</span>
+          </div>
+          <span style="font-size:13px;font-weight:700;color:#10B981;font-family:'JetBrains Mono',monospace;">${c}</span>
+        </div>`).join('') : '<div style="font-size:12px;color:#475569;">Ainda sem fechamentos registrados</div>'}
+    </div>
+
+    <div class="card" style="padding:20px;">
+      <div style="font-size:11px;font-weight:800;color:#A78BFA;margin-bottom:14px;">⏱️ Tempo no Mercado dos que Fecham</div>
+      ${topTempo.length ? topTempo.map(([t,c]) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <span style="font-size:12px;color:#E2E8F0;text-transform:capitalize;">${t}</span>
+          <span style="font-size:13px;font-weight:700;color:#A78BFA;font-family:'JetBrains Mono',monospace;">${c}</span>
+        </div>`).join('') : '<div style="font-size:12px;color:#475569;">Ainda sem fechamentos registrados</div>'}
+    </div>
+
+    <div class="card" style="padding:20px;">
+      <div style="font-size:11px;font-weight:800;color:#00D4FF;margin-bottom:14px;">📊 Pipeline Atual</div>
+      ${Object.entries(statusFlowMap).sort((a,b)=>b[1]-a[1]).map(([s,c]) => {
+        const pct2 = totalLeads ? Math.round((c/totalLeads)*100) : 0;
+        const color = statusColors2[s]||'#64748B';
+        return `
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+              <span style="font-size:11px;color:${color};font-weight:600;text-transform:capitalize;">${s.replace(/_/g,' ')}</span>
+              <span style="font-size:11px;color:#475569;font-family:'JetBrains Mono',monospace;">${c} (${pct2}%)</span>
+            </div>
+            <div class="score-bar"><div class="score-bar-fill" style="width:${pct2}%;background:${color};"></div></div>
+          </div>`;
+      }).join('')}
     </div>`;
 }
 
