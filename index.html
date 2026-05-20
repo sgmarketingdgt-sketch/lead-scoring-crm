@@ -184,9 +184,15 @@ const NICHO_GRUPOS = [
 ];
 
 function getIcp(nicho, segmento) {
-  const txt = ((nicho || '') + ' ' + (segmento || '')).toLowerCase().replace(/_/g, ' ');
+  // Prioridade: segmento (campo de agrupamento da rodada, mais confiável)
+  // Fallback: nicho_cliente (pode estar desatualizado ou errado entre rodadas)
+  const segTxt   = (segmento || '').toLowerCase().replace(/_/g, ' ');
+  const nichoTxt = (nicho    || '').toLowerCase().replace(/_/g, ' ');
   for (const g of NICHO_GRUPOS) {
-    if (g.terms.some(t => txt.includes(t))) return { pts: g.pts, label: g.label, color: g.color };
+    if (g.terms.some(t => segTxt.includes(t))) return { pts: g.pts, label: g.label, color: g.color };
+  }
+  for (const g of NICHO_GRUPOS) {
+    if (g.terms.some(t => nichoTxt.includes(t))) return { pts: g.pts, label: g.label, color: g.color };
   }
   return { pts: 5, label: 'Outros', color: '#64748B' };
 }
@@ -316,7 +322,7 @@ async function saveScores() {
   const rows = scoredLeads.map(l => ({
     lead_id:             l.id,
     lead_nome:           l.nome           || null,
-    nicho:               l.nicho_cliente  || l.segmento || null,
+    nicho:               l.segmento || l.nicho_cliente || null,
     nicho_label:         l._s.nichoLabel,
     cidade:              l.cidade         || null,
     status:              l.status         || 'novo',
@@ -457,14 +463,14 @@ function renderNichos() {
 
     const subMap = {};
     leads.forEach(l => {
-      const n = (l.nicho_cliente || l.segmento || 'não identificado').replace(/_/g, ' ');
+      const n = (l.segmento || l.nicho_cliente || 'não identificado').replace(/_/g, ' ');
       subMap[n] = (subMap[n] || 0) + 1;
     });
     const topSubs = Object.entries(subMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
     const subScores = {};
     leads.forEach(l => {
-      const n = (l.nicho_cliente || l.segmento || 'não identificado').replace(/_/g, ' ');
+      const n = (l.segmento || l.nicho_cliente || 'não identificado').replace(/_/g, ' ');
       if (!subScores[n]) subScores[n] = [];
       subScores[n].push(l._s.total);
     });
